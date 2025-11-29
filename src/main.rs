@@ -4,6 +4,7 @@ mod app;
 mod color_picker;
 mod color_window;
 mod config;
+mod hotkey_dialog;
 mod monitor;
 mod startup;
 mod tray;

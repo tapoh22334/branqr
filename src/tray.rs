@@ -1,7 +1,7 @@
 use crate::startup;
 use std::mem::zeroed;
 use std::ptr::null_mut;
-use std::sync::OnceLock;
+use std::sync::Mutex;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Shell::{
@@ -18,7 +18,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 const WM_TRAYICON: u32 = WM_USER + 1;
 
 pub const MENU_SELECT_COLOR: u16 = 101;
-pub const MENU_STARTUP: u16 = 102;
+pub const MENU_CONFIGURE_HOTKEY: u16 = 102;
+pub const MENU_STARTUP: u16 = 103;
 pub const MENU_EXIT: u16 = 199;
 
 static CLASS_NAME: &[u16] = &[
@@ -27,11 +28,12 @@ static CLASS_NAME: &[u16] = &[
 ];
 
 static mut TRAY_CALLBACK: Option<Box<dyn Fn(TrayEvent)>> = None;
-static HOTKEY_DISPLAY: OnceLock<String> = OnceLock::new();
+static HOTKEY_DISPLAY: Mutex<String> = Mutex::new(String::new());
 
 pub enum TrayEvent {
     DoubleClick,
     SelectColor,
+    ConfigureHotkey,
     ToggleStartup,
     Exit,
 }
@@ -48,7 +50,9 @@ impl TrayIcon {
     {
         unsafe {
             TRAY_CALLBACK = Some(Box::new(callback));
-            let _ = HOTKEY_DISPLAY.set(hotkey_display.to_string());
+            if let Ok(mut display) = HOTKEY_DISPLAY.lock() {
+                *display = hotkey_display.to_string();
+            }
 
             let hinstance = GetModuleHandleW(null_mut());
             if hinstance.is_null() {
@@ -120,6 +124,12 @@ impl Drop for TrayIcon {
     }
 }
 
+pub fn update_hotkey_display(display: &str) {
+    if let Ok(mut hotkey) = HOTKEY_DISPLAY.lock() {
+        *hotkey = display.to_string();
+    }
+}
+
 fn show_context_menu(hwnd: HWND) {
     unsafe {
         let menu = CreatePopupMenu();
@@ -128,7 +138,10 @@ fn show_context_menu(hwnd: HWND) {
         }
 
         // Toggle hint with configurable hotkey
-        let hotkey = HOTKEY_DISPLAY.get().map(|s| s.as_str()).unwrap_or("Ctrl+Shift+B");
+        let hotkey = HOTKEY_DISPLAY
+            .lock()
+            .map(|s| s.clone())
+            .unwrap_or_else(|_| "Ctrl+Shift+B".to_string());
         let toggle_hint = wide_str(&format!("Toggle: {}", hotkey));
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, toggle_hint.as_ptr());
 
@@ -141,6 +154,15 @@ fn show_context_menu(hwnd: HWND) {
             MF_STRING,
             MENU_SELECT_COLOR as usize,
             select_color.as_ptr(),
+        );
+
+        // Configure hotkey
+        let configure_hotkey = wide_str("Configure Hotkey...");
+        AppendMenuW(
+            menu,
+            MF_STRING,
+            MENU_CONFIGURE_HOTKEY as usize,
+            configure_hotkey.as_ptr(),
         );
 
         AppendMenuW(menu, MF_SEPARATOR, 0, null_mut());
@@ -209,6 +231,7 @@ unsafe extern "system" fn tray_window_proc(
             if let Some(ref cb) = TRAY_CALLBACK {
                 match menu_id {
                     MENU_SELECT_COLOR => cb(TrayEvent::SelectColor),
+                    MENU_CONFIGURE_HOTKEY => cb(TrayEvent::ConfigureHotkey),
                     MENU_STARTUP => cb(TrayEvent::ToggleStartup),
                     MENU_EXIT => cb(TrayEvent::Exit),
                     _ => {}

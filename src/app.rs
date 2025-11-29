@@ -1,9 +1,10 @@
 use crate::color_picker::show_color_picker;
 use crate::color_window::{set_hide_callback, ColorWindow};
-use crate::config::Config;
+use crate::config::{Config, HotkeyConfig};
+use crate::hotkey_dialog::show_hotkey_dialog;
 use crate::monitor::enumerate_monitors;
 use crate::startup;
-use crate::tray::{TrayEvent, TrayIcon};
+use crate::tray::{update_hotkey_display, TrayEvent, TrayIcon};
 use std::cell::RefCell;
 use std::mem::zeroed;
 use std::ptr::null_mut;
@@ -20,7 +21,7 @@ pub struct App {
     windows: Rc<RefCell<Vec<ColorWindow>>>,
     color: Rc<RefCell<u32>>,
     visible: Rc<RefCell<bool>>,
-    config: Config,
+    hotkey: Rc<RefCell<HotkeyConfig>>,
 }
 
 impl App {
@@ -29,22 +30,24 @@ impl App {
             windows: Rc::new(RefCell::new(Vec::new())),
             color: Rc::new(RefCell::new(DEFAULT_COLOR)),
             visible: Rc::new(RefCell::new(false)),
-            config,
+            hotkey: Rc::new(RefCell::new(config.hotkey)),
         }
     }
 
     pub fn run(self) {
         // Register global hotkey
+        let hotkey = self.hotkey.borrow();
         unsafe {
             RegisterHotKey(
                 null_mut(),
                 HOTKEY_TOGGLE,
-                self.config.hotkey.modifiers,
-                self.config.hotkey.key,
+                hotkey.modifiers,
+                hotkey.key,
             );
         }
 
-        let hotkey_display = self.config.hotkey.display();
+        let hotkey_display = hotkey.display();
+        drop(hotkey);
 
         let windows_clone = Rc::clone(&self.windows);
         let color_clone = Rc::clone(&self.color);
@@ -59,6 +62,7 @@ impl App {
 
         let color_for_menu = Rc::clone(&self.color);
         let windows_for_menu = Rc::clone(&self.windows);
+        let hotkey_for_menu = Rc::clone(&self.hotkey);
 
         let _tray = TrayIcon::new(&hotkey_display, move |event| match event {
             TrayEvent::DoubleClick => {
@@ -69,6 +73,36 @@ impl App {
                 if let Some(new_color) = show_color_picker(current) {
                     *color_for_menu.borrow_mut() = new_color;
                     update_color(&windows_for_menu, new_color);
+                }
+            }
+            TrayEvent::ConfigureHotkey => {
+                let current = hotkey_for_menu.borrow();
+                let (mods, key) = (current.modifiers, current.key);
+                drop(current);
+
+                if let Some((new_mods, new_key)) = show_hotkey_dialog(mods, key) {
+                    // Unregister old hotkey
+                    unsafe {
+                        UnregisterHotKey(null_mut(), HOTKEY_TOGGLE);
+                    }
+
+                    // Update and register new hotkey
+                    let mut hotkey = hotkey_for_menu.borrow_mut();
+                    hotkey.modifiers = new_mods;
+                    hotkey.key = new_key;
+
+                    unsafe {
+                        RegisterHotKey(null_mut(), HOTKEY_TOGGLE, new_mods, new_key);
+                    }
+
+                    // Update display and save config
+                    let display = hotkey.display();
+                    update_hotkey_display(&display);
+
+                    let config = Config {
+                        hotkey: hotkey.clone(),
+                    };
+                    let _ = config.save();
                 }
             }
             TrayEvent::ToggleStartup => {
