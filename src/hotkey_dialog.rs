@@ -10,10 +10,11 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetWindowLongPtrW, MessageBoxW, PostQuitMessage, RegisterClassW, SetWindowLongPtrW,
-    SetWindowTextW, ShowWindow, TranslateMessage, CW_USEDEFAULT, GWLP_USERDATA, MB_ICONWARNING,
-    MB_OK, MSG, SW_SHOW, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_KEYDOWN, WNDCLASSW,
-    WS_CAPTION, WS_CHILD, WS_EX_DLGMODALFRAME, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
+    GetWindowLongPtrW, KillTimer, MessageBoxW, PostQuitMessage, RegisterClassW,
+    SetTimer, SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage,
+    CW_USEDEFAULT, GWLP_USERDATA, MB_ICONWARNING, MB_OK, MSG, SW_SHOW, WM_CLOSE,
+    WM_COMMAND, WM_CREATE, WM_DESTROY, WM_TIMER, WNDCLASSW, WS_CAPTION, WS_CHILD,
+    WS_EX_DLGMODALFRAME, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
 };
 
 // Window styles for controls
@@ -29,7 +30,7 @@ const MOD_WIN: u32 = 0x0008;
 
 const ID_OK: u16 = 1;
 const ID_CANCEL: u16 = 2;
-const ID_HOTKEY_EDIT: u16 = 3;
+const TIMER_ID: usize = 1;
 
 static CLASS_NAME: &[u16] = &[
     'B' as u16, 'l' as u16, 'a' as u16, 'n' as u16, 'q' as u16, 'r' as u16,
@@ -41,6 +42,7 @@ struct DialogState {
     key: u32,
     confirmed: bool,
     hwnd_edit: HWND,
+    last_key: u32,
 }
 
 pub fn show_hotkey_dialog(current_modifiers: u32, current_key: u32) -> Option<(u32, u32)> {
@@ -70,6 +72,7 @@ pub fn show_hotkey_dialog(current_modifiers: u32, current_key: u32) -> Option<(u
             key: current_key,
             confirmed: false,
             hwnd_edit: null_mut(),
+            last_key: 0,
         }));
 
         let title = wide_str("Configure Hotkey");
@@ -93,6 +96,7 @@ pub fn show_hotkey_dialog(current_modifiers: u32, current_key: u32) -> Option<(u
         }
 
         ShowWindow(hwnd, SW_SHOW);
+        SetFocus(hwnd);
 
         // Message loop
         let mut msg: MSG = zeroed();
@@ -148,8 +152,46 @@ fn format_hotkey(modifiers: u32, key: u32) -> String {
     }
 }
 
-fn is_valid_key(vk: u32) -> bool {
-    matches!(vk, 0x41..=0x5A | 0x30..=0x39 | 0x70..=0x7B)
+fn check_key_state() -> Option<(u32, u32)> {
+    unsafe {
+        // Check modifiers
+        let mut modifiers = 0u32;
+        if GetAsyncKeyState(VK_CONTROL as i32) < 0 {
+            modifiers |= MOD_CONTROL;
+        }
+        if GetAsyncKeyState(VK_MENU as i32) < 0 {
+            modifiers |= MOD_ALT;
+        }
+        if GetAsyncKeyState(VK_SHIFT as i32) < 0 {
+            modifiers |= MOD_SHIFT;
+        }
+        if GetAsyncKeyState(VK_LWIN as i32) < 0 || GetAsyncKeyState(VK_RWIN as i32) < 0 {
+            modifiers |= MOD_WIN;
+        }
+
+        // Check A-Z
+        for vk in 0x41i32..=0x5A {
+            if GetAsyncKeyState(vk) < 0 {
+                return Some((modifiers, vk as u32));
+            }
+        }
+
+        // Check 0-9
+        for vk in 0x30i32..=0x39 {
+            if GetAsyncKeyState(vk) < 0 {
+                return Some((modifiers, vk as u32));
+            }
+        }
+
+        // Check F1-F12
+        for vk in 0x70i32..=0x7B {
+            if GetAsyncKeyState(vk) < 0 {
+                return Some((modifiers, vk as u32));
+            }
+        }
+
+        None
+    }
 }
 
 unsafe extern "system" fn dialog_proc(
@@ -195,7 +237,7 @@ unsafe extern "system" fn dialog_proc(
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_CENTER | ES_READONLY,
                 40, 50, 220, 30,
                 hwnd,
-                ID_HOTKEY_EDIT as isize as _,
+                null_mut(),
                 hinstance,
                 null_mut(),
             );
@@ -231,50 +273,36 @@ unsafe extern "system" fn dialog_proc(
                 null_mut(),
             );
 
-            SetFocus(hwnd);
+            // Start timer to poll key state
+            SetTimer(hwnd, TIMER_ID, 50, None);
+
             0
         }
-        WM_KEYDOWN => {
-            let vk = wparam as u32;
+        WM_TIMER => {
+            if wparam == TIMER_ID {
+                let state_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut RefCell<DialogState>;
+                if !state_ptr.is_null() {
+                    if let Some((modifiers, key)) = check_key_state() {
+                        let state_ref = &*state_ptr;
+                        let mut state = state_ref.borrow_mut();
 
-            // Skip modifier-only keys
-            if matches!(vk, 0x10 | 0x11 | 0x12 | 0x5B | 0x5C) {
-                return 0;
-            }
+                        // Only update if key changed (avoid flickering)
+                        if state.last_key != key {
+                            state.modifiers = modifiers;
+                            state.key = key;
+                            state.last_key = key;
 
-            if !is_valid_key(vk) {
-                return 0;
+                            // Update display
+                            let text = wide_str(&format_hotkey(modifiers, key));
+                            SetWindowTextW(state.hwnd_edit, text.as_ptr());
+                        }
+                    } else {
+                        // No key pressed, reset last_key
+                        let state_ref = &*state_ptr;
+                        state_ref.borrow_mut().last_key = 0;
+                    }
+                }
             }
-
-            let state_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut RefCell<DialogState>;
-            if state_ptr.is_null() {
-                return 0;
-            }
-            let state_ref = &*state_ptr;
-
-            // Get current modifier state
-            let mut modifiers = 0u32;
-            if GetAsyncKeyState(VK_CONTROL as i32) < 0 {
-                modifiers |= MOD_CONTROL;
-            }
-            if GetAsyncKeyState(VK_MENU as i32) < 0 {
-                modifiers |= MOD_ALT;
-            }
-            if GetAsyncKeyState(VK_SHIFT as i32) < 0 {
-                modifiers |= MOD_SHIFT;
-            }
-            if GetAsyncKeyState(VK_LWIN as i32) < 0 || GetAsyncKeyState(VK_RWIN as i32) < 0 {
-                modifiers |= MOD_WIN;
-            }
-
-            let mut state = state_ref.borrow_mut();
-            state.modifiers = modifiers;
-            state.key = vk;
-
-            // Update display
-            let text = wide_str(&format_hotkey(modifiers, vk));
-            SetWindowTextW(state.hwnd_edit, text.as_ptr());
-
             0
         }
         WM_COMMAND => {
@@ -287,17 +315,19 @@ unsafe extern "system" fn dialog_proc(
                         let mut state = state_ref.borrow_mut();
                         if state.key == 0 {
                             let title = wide_str("Warning");
-                            let msg = wide_str("Please press a valid key combination.");
+                            let msg_text = wide_str("Please press a valid key combination.");
                             drop(state);
-                            MessageBoxW(hwnd, msg.as_ptr(), title.as_ptr(), MB_OK | MB_ICONWARNING);
+                            MessageBoxW(hwnd, msg_text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONWARNING);
                         } else {
                             state.confirmed = true;
                             drop(state);
+                            KillTimer(hwnd, TIMER_ID);
                             DestroyWindow(hwnd);
                         }
                     }
                 }
                 ID_CANCEL => {
+                    KillTimer(hwnd, TIMER_ID);
                     DestroyWindow(hwnd);
                 }
                 _ => {}
@@ -305,6 +335,7 @@ unsafe extern "system" fn dialog_proc(
             0
         }
         WM_CLOSE => {
+            KillTimer(hwnd, TIMER_ID);
             DestroyWindow(hwnd);
             0
         }
