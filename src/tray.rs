@@ -157,7 +157,7 @@ fn show_context_menu(hwnd: HWND) {
         );
 
         // Configure hotkey
-        let configure_hotkey = wide_str("Configure Hotkey...");
+        let configure_hotkey = wide_str("Hotkey...");
         AppendMenuW(
             menu,
             MF_STRING,

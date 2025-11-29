@@ -21,7 +21,6 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 const BS_DEFPUSHBUTTON: u32 = 0x00000001;
 const ES_CENTER: u32 = 0x0001;
 const ES_READONLY: u32 = 0x0800;
-const SS_CENTER: u32 = 0x0001;
 
 const MOD_ALT: u32 = 0x0001;
 const MOD_CONTROL: u32 = 0x0002;
@@ -75,7 +74,7 @@ pub fn show_hotkey_dialog(current_modifiers: u32, current_key: u32) -> Option<(u
             last_key: 0,
         }));
 
-        let title = wide_str("Configure Hotkey");
+        let title = wide_str("Hotkey");
         let hwnd = CreateWindowExW(
             WS_EX_DLGMODALFRAME,
             CLASS_NAME.as_ptr(),
@@ -83,8 +82,8 @@ pub fn show_hotkey_dialog(current_modifiers: u32, current_key: u32) -> Option<(u
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            320,
-            180,
+            280,
+            140,
             null_mut(),
             null_mut(),
             hinstance,
@@ -208,20 +207,6 @@ unsafe extern "system" fn dialog_proc(
 
             let hinstance = GetModuleHandleW(null_mut());
 
-            // Label
-            let label = wide_str("Press your desired hotkey combination:");
-            let static_class = wide_str("STATIC");
-            CreateWindowExW(
-                0,
-                static_class.as_ptr(),
-                label.as_ptr(),
-                WS_CHILD | WS_VISIBLE | SS_CENTER,
-                10, 15, 280, 20,
-                hwnd,
-                null_mut(),
-                hinstance,
-                null_mut(),
-            );
 
             // Hotkey display (readonly edit)
             let edit_class = wide_str("EDIT");
@@ -235,7 +220,7 @@ unsafe extern "system" fn dialog_proc(
                 edit_class.as_ptr(),
                 initial_text.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_CENTER | ES_READONLY,
-                40, 50, 220, 30,
+                20, 15, 220, 30,
                 hwnd,
                 null_mut(),
                 hinstance,
@@ -252,7 +237,7 @@ unsafe extern "system" fn dialog_proc(
                 button_class.as_ptr(),
                 ok_text.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                60, 100, 80, 30,
+                20, 60, 80, 30,
                 hwnd,
                 ID_OK as isize as _,
                 hinstance,
@@ -266,7 +251,7 @@ unsafe extern "system" fn dialog_proc(
                 button_class.as_ptr(),
                 cancel_text.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                160, 100, 80, 30,
+                160, 60, 80, 30,
                 hwnd,
                 ID_CANCEL as isize as _,
                 hinstance,
@@ -314,8 +299,8 @@ unsafe extern "system" fn dialog_proc(
                         let state_ref = &*state_ptr;
                         let mut state = state_ref.borrow_mut();
                         if state.key == 0 {
-                            let title = wide_str("Warning");
-                            let msg_text = wide_str("Please press a valid key combination.");
+                            let title = wide_str("Blanqr");
+                            let msg_text = wide_str("Press Ctrl/Alt/Shift + Key");
                             drop(state);
                             MessageBoxW(hwnd, msg_text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONWARNING);
                         } else {
