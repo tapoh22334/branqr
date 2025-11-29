@@ -2,6 +2,7 @@ use crate::color_picker::show_color_picker;
 use crate::color_window::{set_hide_callback, ColorWindow};
 use crate::config::Config;
 use crate::monitor::enumerate_monitors;
+use crate::startup;
 use crate::tray::{TrayEvent, TrayIcon};
 use std::cell::RefCell;
 use std::mem::zeroed;
@@ -69,6 +70,10 @@ impl App {
                     *color_for_menu.borrow_mut() = new_color;
                     update_color(&windows_for_menu, new_color);
                 }
+            }
+            TrayEvent::ToggleStartup => {
+                let enabled = startup::is_startup_enabled();
+                startup::set_startup_enabled(!enabled);
             }
             TrayEvent::Exit => {
                 unsafe {

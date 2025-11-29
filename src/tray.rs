@@ -1,3 +1,4 @@
+use crate::startup;
 use std::mem::zeroed;
 use std::ptr::null_mut;
 use std::sync::OnceLock;
@@ -9,14 +10,15 @@ use windows_sys::Win32::UI::Shell::{
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
     GetCursorPos, LoadIconW, PostQuitMessage, RegisterClassW, SetForegroundWindow, TrackPopupMenu,
-    CS_HREDRAW, CS_VREDRAW, IDI_APPLICATION, MF_GRAYED, MF_SEPARATOR, MF_STRING, TPM_BOTTOMALIGN,
-    TPM_LEFTALIGN, WM_COMMAND, WM_DESTROY, WM_LBUTTONDBLCLK, WM_RBUTTONUP, WM_USER, WNDCLASSW,
-    WS_OVERLAPPEDWINDOW,
+    CS_HREDRAW, CS_VREDRAW, IDI_APPLICATION, MF_CHECKED, MF_GRAYED, MF_SEPARATOR, MF_STRING,
+    TPM_BOTTOMALIGN, TPM_LEFTALIGN, WM_COMMAND, WM_DESTROY, WM_LBUTTONDBLCLK, WM_RBUTTONUP,
+    WM_USER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 
 const WM_TRAYICON: u32 = WM_USER + 1;
 
 pub const MENU_SELECT_COLOR: u16 = 101;
+pub const MENU_STARTUP: u16 = 102;
 pub const MENU_EXIT: u16 = 199;
 
 static CLASS_NAME: &[u16] = &[
@@ -30,6 +32,7 @@ static HOTKEY_DISPLAY: OnceLock<String> = OnceLock::new();
 pub enum TrayEvent {
     DoubleClick,
     SelectColor,
+    ToggleStartup,
     Exit,
 }
 
@@ -142,6 +145,22 @@ fn show_context_menu(hwnd: HWND) {
 
         AppendMenuW(menu, MF_SEPARATOR, 0, null_mut());
 
+        // Run at startup
+        let startup_text = wide_str("Run at Startup");
+        let startup_flags = if startup::is_startup_enabled() {
+            MF_STRING | MF_CHECKED
+        } else {
+            MF_STRING
+        };
+        AppendMenuW(
+            menu,
+            startup_flags,
+            MENU_STARTUP as usize,
+            startup_text.as_ptr(),
+        );
+
+        AppendMenuW(menu, MF_SEPARATOR, 0, null_mut());
+
         // Exit
         let exit = wide_str("Exit");
         AppendMenuW(menu, MF_STRING, MENU_EXIT as usize, exit.as_ptr());
@@ -190,6 +209,7 @@ unsafe extern "system" fn tray_window_proc(
             if let Some(ref cb) = TRAY_CALLBACK {
                 match menu_id {
                     MENU_SELECT_COLOR => cb(TrayEvent::SelectColor),
+                    MENU_STARTUP => cb(TrayEvent::ToggleStartup),
                     MENU_EXIT => cb(TrayEvent::Exit),
                     _ => {}
                 }
