@@ -66,6 +66,7 @@ impl Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn save(&self) -> std::io::Result<()> {
         let path = Self::config_path();
         if let Some(parent) = path.parent() {
