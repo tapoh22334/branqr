@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
+const APP_NAME: &str = "Blanqr";
+const CONFIG_FILE: &str = "config.ini";
+
 #[derive(Clone)]
 pub struct HotkeyConfig {
     pub modifiers: u32,
@@ -63,9 +66,23 @@ impl Config {
         }
     }
 
+    pub fn save(&self) -> std::io::Result<()> {
+        let path = Self::config_path();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let content = format!("hotkey = {}\n", self.hotkey.display());
+        fs::write(&path, content)
+    }
+
+    pub fn config_dir() -> Option<PathBuf> {
+        std::env::var("APPDATA").ok().map(|p| PathBuf::from(p).join(APP_NAME))
+    }
+
     fn config_path() -> PathBuf {
-        let exe_path = std::env::current_exe().unwrap_or_default();
-        exe_path.with_file_name("blanqr.conf")
+        Self::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(CONFIG_FILE)
     }
 
     fn parse(content: &str) -> Self {

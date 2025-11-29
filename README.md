@@ -22,21 +22,17 @@ A lightweight Windows system tray application that fills your screen with a sing
 
 ## Configuration
 
-Create a `blanqr.conf` file in the same directory as the executable:
+Settings are stored in `%APPDATA%\Blanqr\config.ini`:
 
 ```ini
-# Hotkey configuration
-# Format: modifier+modifier+key
-# Modifiers: Ctrl, Alt, Shift, Win
-# Keys: A-Z, 0-9, F1-F12
-
 hotkey = Ctrl+Shift+B
 ```
 
-Examples:
-- `hotkey = Ctrl+Alt+F1`
-- `hotkey = Win+Shift+C`
-- `hotkey = Ctrl+F12`
+**Hotkey format:** `modifier+modifier+key`
+- Modifiers: `Ctrl`, `Alt`, `Shift`, `Win`
+- Keys: `A`-`Z`, `0`-`9`, `F1`-`F12`
+
+Examples: `Ctrl+Alt+F1`, `Win+Shift+C`, `Ctrl+F12`
 
 ## Requirements
 
