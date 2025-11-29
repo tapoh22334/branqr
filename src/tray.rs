@@ -1,5 +1,6 @@
 use std::mem::zeroed;
 use std::ptr::null_mut;
+use std::sync::OnceLock;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Shell::{
@@ -24,6 +25,7 @@ static CLASS_NAME: &[u16] = &[
 ];
 
 static mut TRAY_CALLBACK: Option<Box<dyn Fn(TrayEvent)>> = None;
+static HOTKEY_DISPLAY: OnceLock<String> = OnceLock::new();
 
 pub enum TrayEvent {
     DoubleClick,
@@ -37,12 +39,13 @@ pub struct TrayIcon {
 }
 
 impl TrayIcon {
-    pub fn new<F>(callback: F) -> Option<Self>
+    pub fn new<F>(hotkey_display: &str, callback: F) -> Option<Self>
     where
         F: Fn(TrayEvent) + 'static,
     {
         unsafe {
             TRAY_CALLBACK = Some(Box::new(callback));
+            let _ = HOTKEY_DISPLAY.set(hotkey_display.to_string());
 
             let hinstance = GetModuleHandleW(null_mut());
             if hinstance.is_null() {
@@ -121,14 +124,15 @@ fn show_context_menu(hwnd: HWND) {
             return;
         }
 
-        // Toggle hint
-        let toggle_hint = wide_str("切替: Ctrl+Shift+B");
+        // Toggle hint with configurable hotkey
+        let hotkey = HOTKEY_DISPLAY.get().map(|s| s.as_str()).unwrap_or("Ctrl+Shift+B");
+        let toggle_hint = wide_str(&format!("Toggle: {}", hotkey));
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, toggle_hint.as_ptr());
 
         AppendMenuW(menu, MF_SEPARATOR, 0, null_mut());
 
         // Color selection
-        let select_color = wide_str("色を選択...");
+        let select_color = wide_str("Select Color...");
         AppendMenuW(
             menu,
             MF_STRING,
@@ -139,7 +143,7 @@ fn show_context_menu(hwnd: HWND) {
         AppendMenuW(menu, MF_SEPARATOR, 0, null_mut());
 
         // Exit
-        let exit = wide_str("終了");
+        let exit = wide_str("Exit");
         AppendMenuW(menu, MF_STRING, MENU_EXIT as usize, exit.as_ptr());
 
         let mut pt: POINT = zeroed();

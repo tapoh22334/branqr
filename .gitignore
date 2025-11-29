@@ -1,2 +1,8 @@
 /target
 Cargo.lock
+.claude/
+.claude-flow/
+.hive-mind/
+.swarm/
+claude-flow
+*.conf

@@ -6,7 +6,7 @@ A lightweight Windows system tray application that fills your screen with a sing
 
 - **Full-screen color overlay** with multi-monitor support
 - **System tray integration** for background operation
-- **Global hotkey** (`Ctrl+Shift+B`) for quick toggle
+- **Configurable global hotkey** (default: `Ctrl+Shift+B`)
 - **16 preset colors** (black, white, grays, and warm tones)
 - **Custom color picker** via Windows color dialog
 
@@ -15,12 +15,28 @@ A lightweight Windows system tray application that fills your screen with a sing
 1. Launch `blanqr.exe` - an icon appears in the system tray
 2. **Toggle overlay:**
    - Double-click the tray icon, or
-   - Press `Ctrl+Shift+B`
+   - Press `Ctrl+Shift+B` (configurable)
 3. **Change color:** Right-click tray icon and select color
 4. **Hide overlay:** Click anywhere, press `Escape`, or toggle again
 5. **Exit:** Right-click tray icon and select exit
 
-Note: Menu items appear in Japanese (色を選択 = Select color, 終了 = Exit).
+## Configuration
+
+Create a `blanqr.conf` file in the same directory as the executable:
+
+```ini
+# Hotkey configuration
+# Format: modifier+modifier+key
+# Modifiers: Ctrl, Alt, Shift, Win
+# Keys: A-Z, 0-9, F1-F12
+
+hotkey = Ctrl+Shift+B
+```
+
+Examples:
+- `hotkey = Ctrl+Alt+F1`
+- `hotkey = Win+Shift+C`
+- `hotkey = Ctrl+F12`
 
 ## Requirements
 

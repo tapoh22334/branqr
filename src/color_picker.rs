@@ -313,7 +313,7 @@ unsafe extern "system" fn picker_window_proc(
             DeleteObject(pen as _);
 
             SetTextColor(hdc, 0x00FFFFFF);
-            let btn_text = wide_str("カスタムカラー...");
+            let btn_text = wide_str("Custom Color...");
             let text_x = custom_rect.left + (custom_rect.right - custom_rect.left) / 2 - 50;
             let text_y = custom_rect.top + (CUSTOM_BUTTON_HEIGHT - 16) / 2;
             TextOutW(hdc, text_x, text_y, btn_text.as_ptr(), btn_text.len() as i32 - 1);

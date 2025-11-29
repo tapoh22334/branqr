@@ -1,14 +1,13 @@
 use crate::color_picker::show_color_picker;
 use crate::color_window::{set_hide_callback, ColorWindow};
+use crate::config::Config;
 use crate::monitor::enumerate_monitors;
 use crate::tray::{TrayEvent, TrayIcon};
 use std::cell::RefCell;
 use std::mem::zeroed;
 use std::ptr::null_mut;
 use std::rc::Rc;
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    RegisterHotKey, UnregisterHotKey, MOD_CONTROL, MOD_SHIFT,
-};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetMessageW, PostQuitMessage, TranslateMessage, MSG, WM_HOTKEY,
 };
@@ -20,27 +19,31 @@ pub struct App {
     windows: Rc<RefCell<Vec<ColorWindow>>>,
     color: Rc<RefCell<u32>>,
     visible: Rc<RefCell<bool>>,
+    config: Config,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(config: Config) -> Self {
         App {
             windows: Rc::new(RefCell::new(Vec::new())),
             color: Rc::new(RefCell::new(DEFAULT_COLOR)),
             visible: Rc::new(RefCell::new(false)),
+            config,
         }
     }
 
     pub fn run(self) {
-        // Register global hotkey (Ctrl+Shift+B)
+        // Register global hotkey
         unsafe {
             RegisterHotKey(
                 null_mut(),
                 HOTKEY_TOGGLE,
-                MOD_CONTROL | MOD_SHIFT,
-                'B' as u32,
+                self.config.hotkey.modifiers,
+                self.config.hotkey.key,
             );
         }
+
+        let hotkey_display = self.config.hotkey.display();
 
         let windows_clone = Rc::clone(&self.windows);
         let color_clone = Rc::clone(&self.color);
@@ -56,7 +59,7 @@ impl App {
         let color_for_menu = Rc::clone(&self.color);
         let windows_for_menu = Rc::clone(&self.windows);
 
-        let _tray = TrayIcon::new(move |event| match event {
+        let _tray = TrayIcon::new(&hotkey_display, move |event| match event {
             TrayEvent::DoubleClick => {
                 toggle(&windows_clone, &color_clone, &visible_clone);
             }
