@@ -148,16 +148,15 @@ fn show_all(
     let monitors = enumerate_monitors();
     let mut wins = windows.borrow_mut();
 
-    if wins.is_empty() {
-        for monitor in &monitors {
-            if let Some(window) = ColorWindow::new(monitor, current_color) {
-                wins.push(window);
-            }
+    // Clear existing windows and recreate for current monitor configuration
+    wins.clear();
+    for monitor in &monitors {
+        if let Some(window) = ColorWindow::new(monitor, current_color) {
+            wins.push(window);
         }
     }
 
     for window in wins.iter() {
-        window.set_color(current_color);
         window.show();
     }
 
